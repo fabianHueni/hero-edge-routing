@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Browser LLM Evaluation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-900 min-h-screen">
+<main class="max-w-6xl mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-6 text-center">Browser LLM Evaluation</h1>
+    <p class="mb-6 text-gray-700 text-center">
+        This project explores how in-browser LLM inference behaves compared to cloud-based inference in terms of
+        latency.
+        The goal is to model different request incoming patterns and routing strategies between cloud and on-device
+        models.
+        For the prompts and evaluation of the accuracy the <a href="https://huggingface.co/datasets/google/boolq" target="_blank">BooIQ</a> dataset is used.
+        The project is currently under development and does not aim to provide accurate LLM responses, but rather to
+        measure performance differences.
+        To run the cloud based inference, you need to bring your own OpenRouter API key.
+    </p>
+
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Cloud Card -->
+        <div class="bg-white p-6 rounded-2xl shadow-xl border border-gray-200 flex flex-col">
+            <div>
+                <h2 class="text-xl font-semibold mb-4">Cloud (OpenRouter)</h2>
+                <label class="block mb-4 text-sm font-medium">Model
+                    <select id="cloudModel"
+                            class="w-full mb-4 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="meta-llama/llama-3.2-1b-instruct">meta-llama/llama-3.2-1b-instruct</option>
+                        <option value="ibm-granite/granite-4.0-h-micro">ibm-granite/granite-4.0-h-micro</option>
+                        <option value="qwen/qwen3-4b:free">qwen/qwen3-4b</option>
+                        <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
+                        <option value="openai/gpt-5-mini">openai/gpt-5-mini</option>
+                        <option value="openai/gpt-4.1-mini">openai/gpt-4.1-mini</option>
+                        <option value="google/gemma-3n-e2b-it:free">google/gemma-3n-e2b-it:free</option>
+                        <option value="meta-llama/llama-3.2-3b-instruct">meta-llama/llama-3.2-3b-instruct</option>
+                    </select>
+                </label>
+
+                <label class="block mb-4 text-sm font-medium">API Key OpenRouter
+                    <input id="cloudApiKey" type="text" placeholder="Key..."
+                           class="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"/>
+                </label>
+            </div>
+
+            <div class="mt-auto">
+                <h3 class="text-lg font-semibold mt-4 mb-2">Linear Model for HERO (cloud)</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium">Slope (ms/char)
+                            <input id="cloudSlope" type="number" step="0.001" value="0.0"
+                                   class="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"/>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium">Intercept (ms)
+                            <input id="cloudIntercept" type="number" step="1" value="0.0"
+                                   class="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"/>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- On-Device Card -->
+        <div class="bg-white p-6 rounded-2xl shadow-xl border border-gray-200 flex flex-col">
+            <div>
+                <h2 class="text-xl font-semibold mb-4">On-Device</h2>
+
+                <label class="block text-sm font-medium">Model (transformers.js)
+                    <select id="deviceModel"
+                            class="w-full mb-2 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value='{"modelName": "onnx-community/gemma-3-270m-it-ONNX", "quantization": "fp32"}'>gemma-3-270m-it-ONNX (fp32)</option>
+                        <option value='{"modelName": "onnx-community/granite-4.0-350m-ONNX-web", "quantization": "fp32"}'>granite-4.0-350m-ONNX-web (fp32)</option>
+                        <option value='{"modelName": "onnx-community/Llama-3.2-1B-Instruct-ONNX", "quantization": "fp32"}'>Llama-3.2-1B-Instruct-ONNX (fp32)</option>
+                        <option value='{"modelName": "onnx-community/granite-4.0-micro-ONNX-web", "quantization": "q4f16"}'>granite-4.0-micro-ONNX-web (q4f16, 3B)</option>
+                        <option value='{"modelName": "onnx-community/Qwen3-4B-ONNX", "quantization": "q4f16"}'>Qwen3-4B-ONNX (q4f16)</option>
+    <!--                    <option disabled value='{"modelName": "onnx-community/Qwen3-0.6B-ONNX", "quantization": "fp32"}'>Qwen3-0.6B-ONNX</option>
+                        <option disabled value='{"modelName": "onnx-community/gemma-3-1b-it-ONNX-GQA", "quantization": "q4f16"}'>gemma-3-1b-it-ONNX-GQA (q4f16)</option>
+                        <option disabled value='{"modelName": "onnx-community/Llama-3.2-3B-Instruct-ONNX", "quantization": "fp32"}'>Llama-3.2-3B-Instruct-ONNX (not
+                            working)
+                        </option>
+                        <option disabled value='{"modelName": "onnx-community/gemma-3-1b-it-ONNX", "quantization": "fp32"}'>gemma-3-1b-it-ONNX (fp32)</option>-->
+                    </select>
+                </label>
+
+                <button id="loadDeviceModelBtn"
+                        class="mt-4 w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">Load Model
+                </button>
+
+                <div id="deviceStatus" class="text-gray-700 text-sm my-4">Not loaded</div>
+
+                <div id="deviceLoadingContainer" class="w-full max-w-xs my-2">
+                    <div id="deviceLoadingBar" class="h-2 bg-green-500 transition-all duration-200 w-0"></div>
+                    <span id="deviceLoadingText" class="text-xs text-gray-600"></span>
+                </div>
+            </div>
+        
+            <div class="mt-auto">
+                <h3 class="text-lg font-semibold mt-4 mb-2">Linear Model for HERO (on-device)</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium">Slope (ms/char)
+                            <input id="deviceSlope" type="number" step="0.001" value="0.0"
+                                   class="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"/>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium">Intercept (ms)
+                            <input id="deviceIntercept" type="number" step="1" value="0.0"
+                                   class="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"/>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Request Pattern Card -->
+        <div class="bg-white p-6 rounded-2xl shadow-xl border border-gray-200">
+            <h2 class="text-xl font-semibold mb-4">Request Pattern & Routing</h2>
+
+            <label class="block mb-4 text-sm font-medium">Dataset
+                <select id="dataset"
+                        class="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <option value="boolq_validation">BoolQ</option>
+                    <option value="spam_ham_dataset">Spam</option>
+                    <option value="imdb_dataset">IMDB</option>
+                    <option value="ag_news_test">AG News</option>
+                    <option value="lorem_ipsum_dataset">Lorem ipsum</option>
+                </select>
+            </label>
+
+            <label class="block mb-4 text-sm font-medium">Load Pattern
+                <select id="patternSelect"
+                        class="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <option value="once-per-sec">1 request / sec</option>
+                    <option value="every-ten-sec">Every 10 sec 1 request</option>
+                    <option value="exponential-arrival">Exponential arrival time</option>
+                </select>
+            </label>
+
+            <label class="block mb-4 text-sm font-medium">Route strategy
+                <select id="routeStrategy"
+                        class="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <option value="always_device">Always device</option>
+                    <option value="always_cloud">Always cloud</option>
+                    <option value="roundrobin">Round Robin</option>
+                    <option value="probabilistic">Probabilistic (p to cloud)</option>
+                    <option value="hero">HERO (Stateful)</option>
+                </select>
+            </label>
+
+            <label class="block mb-4 text-sm font-medium">Cloud probability (for probabilistic)
+                <input id="cloudProb" type="number" min="0" max="1" step="0.1" value="0.5"
+                       class="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"/>
+            </label>
+
+            <label class="block mb-4 text-sm font-medium">Interarrival Time Lambda (for exponential arrival)
+                <input id="interArrivalTimeLambda" type="number" min="0" step="0.1" value="2" class="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"/>
+            </label>
+
+            <div class="flex gap-3 mt-4">
+                <button id="startBtn" class="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition">
+                    Start
+                </button>
+                <button id="stopBtn" disabled class="flex-1 bg-gray-400 text-white py-2 rounded-lg">Stop</button>
+                <button id="start1000Btn" class="flex-1 bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition">
+                    Start 500
+                </button>
+            </div>
+        </div>
+
+        <!-- Log Card -->
+        <div class="bg-white p-6 rounded-2xl shadow-xl border border-gray-200 md:col-span-3">
+            <h2 class="text-xl font-semibold mb-4">Live Log & Results</h2>
+            <div class="block w-full h-64 overflow-scroll">
+                <table id="log"
+                       class="w-full h-64 overflow-scroll bg-gray-50 p-3 rounded-lg border border-gray-200 text-sm">
+                    <thead>
+                    <tr>
+                        <th class="text-left">ID</th>
+                        <th class="text-left">Time</th>
+                        <th class="text-left">Route</th>
+                        <th class="text-left">Total Latency (ms)</th>
+                        <th class="text-left">Queue (ms)</th>
+                        <th class="text-left">Inference (ms)</th>
+                        <th class="text-left">Question</th>
+                        <th class="text-left">Answer</th>
+                        <th class="text-left">Correct</th>
+                    </tr>
+                    </thead>
+                    <tbody id="log-table-body"></tbody>
+                </table>
+            </div>
+
+            <div id="stats" class="mt-4 text-sm text-gray-800"></div>
+            <div class="flex flex-col md:flex-row gap-4 mt-4">
+                <button id="downloadStatsCsv"
+                        class="mt-4 w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition">
+                    Download Runs as CSV
+                </button>
+            </div>
+
+        </div>
+    </section>
+
+    <footer class="mt-12 text-center text-gray-600 text-sm">
+        <p>Developed by
+            <a href="https://www.linkedin.com/in/fabian-h%C3%BCni/" target="_blank" class="text-blue-500 hover:underline">Fabian Hüni</a>,
+            <a href="https://www.linkedin.com/in/philip-kehl/" target="_blank" class="text-blue-500 hover:underline">Philip Kehl</a> and
+            <a href="https://www.linkedin.com/in/nicolas-wyss-6b172428b/" target="_blank" class="text-blue-500 hover:underline">Nicolas Wyss</a>.
+        </p>
+    </footer>
+</main>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
