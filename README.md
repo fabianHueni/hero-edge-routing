@@ -92,7 +92,7 @@ to balance exploration and exploitation as load conditions change.
 
 ### Browser Experiment Runner
 
-The experiment runner is a static web application. No build step is required.
+The experiment runner is a static web application. No build step is required. A short tutorial video is available on [YouTube](https://www.youtube.com/watch?v=zvwa7xPAYkc&t=64s)
 
 **Prerequisites**
 
