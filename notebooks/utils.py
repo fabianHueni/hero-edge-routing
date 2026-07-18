@@ -1292,7 +1292,7 @@ def run_multi_run_analysis(
     show_evolution: bool = True
 ) -> None:
     """
-    Analyzes and plots total error deviations across multple experiment runs.
+    Analyzes and plots total error deviations across multiple experiment runs.
     """
     if not file_list:
         print("Error: The file list is empty.")
@@ -1346,36 +1346,45 @@ def run_multi_run_analysis(
         plt.show()
 
     if show_evolution:
-        plt.figure(figsize=(8, 3.8))
+        plt.figure(figsize=(8.5, 4.2))
         
-        plt.plot(agg_df['dataset_item_id'], agg_df['abs_total_err_mean'], color='darkslategray', lw=1, label='Mean Inference + Queueing Time Prediction Error')
-        plt.fill_between(
-            agg_df['dataset_item_id'],
-            agg_df['abs_total_err_mean'] - agg_df['abs_total_err_std'],
-            agg_df['abs_total_err_mean'] + agg_df['abs_total_err_std'],
-            color='darkslategray', alpha=0.05, label='Std. Dev. Inference + Queueing Time Prediction Error'
+        # Colors selected directly from Okabe-Ito guidelines
+        color_total = '#009E73'  # Bluish Green
+        color_inf = '#D55E00'    # Vermillion
+        
+        # 1. Plot Mean Total Error (Solid Line Layout with cleaned labels)
+        plt.plot(
+            agg_df['dataset_item_id'], agg_df['abs_total_err_mean'], 
+            color=color_total, linestyle='-', lw=1.5, 
+            label='Mean Total Error (Inference + Queueing)'
         )
         
-        plt.plot(agg_df['dataset_item_id'], agg_df['abs_inf_err_mean'], color='darkviolet', lw=1, label='Mean Inference Time Prediction Error')
-        plt.fill_between(
-            agg_df['dataset_item_id'],
-            agg_df['abs_inf_err_mean'] - agg_df['abs_inf_err_std'],
-            agg_df['abs_inf_err_mean'] + agg_df['abs_inf_err_std'],
-            color='darkviolet', alpha=0.05, label='Std. Dev. Inference Time Prediction Error'
+        # 2. Plot Mean Inference Error (Dashed Line for clear B&W contrast)
+        plt.plot(
+            agg_df['dataset_item_id'], agg_df['abs_inf_err_mean'], 
+            color=color_inf, linestyle='--', lw=1.5, 
+            label='Mean Inference Error'
         )
         
+        # Sizing and framing layout optimization
         plt.yscale('log') 
-        plt.xlabel('Dataset Item ID')
-        plt.ylabel('Absolute Error (ms) [Log Scale]')
-        plt.legend()
+        plt.xlabel('Dataset Item ID', fontsize=14, labelpad=8)
+        plt.ylabel('Absolute Error (ms) [Log Scale]', fontsize=14, labelpad=8)
+        plt.tick_params(axis='both', which='major', labelsize=12)
+        
+        # Soft baseline grid integration
+        plt.grid(True, which="major", axis="both", ls="-", alpha=0.4)
+        plt.grid(False, which="minor", axis="y") 
+        
+        # Clean, compact legend
+        plt.legend(fontsize=12, loc='upper right', frameon=True, framealpha=0.9)
         
         out_dir = Path('./plots')
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
-        filename = out_dir / f'time_prediction_error_{timestamp}.pdf'
+        filename = out_dir / f'time_prediction_error.pdf'
 
-        plt.savefig(filename, format='pdf', dpi=300)
+        plt.savefig(filename, format='pdf', dpi=300, bbox_inches='tight')
         print(f"Saved plot: {filename}")
 
         plt.show()
