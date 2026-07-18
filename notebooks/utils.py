@@ -59,62 +59,90 @@ def plot_characters_vs_inference_time(
     model: str
 ) -> None:
     """
-    Plots scatter plots of number of input characters vs inference time for multiple models and experiments.
-
-    Args:
-        experiment_data: A list of lists of DataFrames. Each sublist corresponds to a 
-                         model/device combination and contains DataFrames for different datasets.
-        labels: A list of lists of labels corresponding to each DataFrame in experiment_data.
-        subplot_names: A list of model names corresponding to each sublist in experiment_data.
-        model: The name of the model being evaluated.
+    Plots scatter plots of number of input characters vs inference time with shared axes.
     """
+    # Okabe-Ito Palette Colors
     COLOR_MAP = {
-        'spam': '#2ca02c',        # green
-        'ag-news': '#1f77b4',     # blue
-        'boolq': '#ff7f0e',       # orange
-        'lorem-ipsum': '#9467bd'  # purple
+        'spam': '#56B4E9',        # Sky Blue
+        'ag-news': '#009E73',     # Bluish Green
+        'boolq': '#D55E00',       # Vermillion
+        'lorem-ipsum': '#E69F00'  # Orange
     }
     DEFAULT_COLOR = 'black'
+    MARKER_MAP = {'spam': 'o', 'ag-news': '^', 'boolq': 's', 'lorem-ipsum': 'D'}
+    
+    # Custom size mapping to compensate for marker geometry and visual weight
+    SIZE_MAP = {'spam': 35, 'ag-news': 60, 'boolq': 30, 'lorem-ipsum': 25}
+    DEFAULT_SIZE = 20
 
     sns.set(style="whitegrid")
 
     rows = len(experiment_data) // 2 + len(experiment_data) % 2
-    fig, axes = plt.subplots(nrows=rows, ncols=2, figsize=(14, rows * 4))
+    
+    # Enable shared axes: share x across columns, share y across rows
+    fig, axes = plt.subplots(nrows=rows, ncols=2, figsize=(14, rows * 4.5), sharex='col', sharey='row')
     axes_flat = axes.flatten()
 
     # Loop through each model/device combination
-    for ax, model_experiments, model_labels, model_name in zip(axes_flat, experiment_data, labels, subplot_names):
+    for idx, (ax, model_experiments, model_labels, model_name) in enumerate(zip(axes_flat, experiment_data, labels, subplot_names)):
+        
+        # Determine subplot positioning in the grid
+        is_left_col = (idx % 2 == 0)
+        is_bottom_row = (idx >= (rows - 1) * 2)
 
+        # Sort model_experiments and model_labels so smaller datasets are plotted last (on top)
+        sorted_zip = sorted(zip(model_experiments, model_labels), key=lambda x: len(x[0]), reverse=True)
         # Loop through each DataFrame and plot
-        for df, label in zip(model_experiments, model_labels):
+        for df, label in sorted_zip:
             if 'number_of_characters' in df.columns and 'inference_time_ms' in df.columns:
-                # generate a size vector to set all sizes to 1 for better visibility
-                size = np.ones(len(df)) * 5
+                # Use the size mapping dictionary to determine marker-specific size
+                base_size = SIZE_MAP.get(label.lower(), DEFAULT_SIZE)
+                size = np.ones(len(df)) * base_size
                 color = COLOR_MAP.get(label.lower(), DEFAULT_COLOR)
                 ax.scatter(df['number_of_characters'], df['inference_time_ms'], 
-                           color=color, alpha=0.4, label=label, sizes=size)
+                           marker=MARKER_MAP.get(label.lower(), 'o'),
+                           color=color, alpha=0.6, label=label, s=size,
+                           edgecolors='white', linewidths=0.2)
 
-        ax.set_title(model_name, fontsize=12)
-        ax.set_xlabel('Input Characters', fontsize=12)
-        ax.set_ylabel('Inference Time (ms)', fontsize=12)
+        ax.set_title(model_name, fontsize=25)
+        
+        # Only add X label to the bottom row subplots
+        if is_bottom_row:
+            ax.set_xlabel('Input Characters', fontsize=22)
+        else:
+            ax.set_xlabel('')
 
+        # Only add Y label and keep ticks on the left column subplots
+        if is_left_col:
+            ax.set_ylabel('Inference Time (ms)', fontsize=22)
+        else:
+            ax.set_ylabel('')
+            # Explicitly turn off tick labels for the right column
+            ax.yaxis.set_tick_params(labelleft=False)
+
+        # Set scale types and tick sizes inside the loop
         ax.set_yscale('log')
         ax.set_xscale('log')
+        ax.tick_params(axis='both', which='major', labelsize=22)
+        ax.grid(True, which="both", ls="-", alpha=0.5)
 
-        ax.set_xlim(100, 15000)
-        ax.set_ylim(100, 15000)
+        if idx == 0:
+            leg = ax.legend(fontsize=22, loc='lower right')
+            for lh in leg.legend_handles: 
+                lh.set_alpha(1.0)
+                lh.set_sizes([150])
 
-        ax.grid()
-        ax.legend(title='Datasets', fontsize=11, loc='upper left')
-
-    fig.suptitle(f'Inference Time vs. Input Characters for {model}', fontsize=20)
-    plt.tight_layout()
-
+    # Remove last unused subplot if applicable BEFORE setting global limits
     if len(experiment_data) % 2 != 0:
-        # remove last unused subplot
         fig.delaxes(axes_flat[-1])
 
-    plt.savefig(f'./plots/characters_vs_inference_time_{model}_model.png', dpi=300)
+    # ---> CRITICAL FIX: Apply uniform limits globally to all remaining axes <---
+    for ax in fig.axes:
+        ax.set_xlim(300, 30000)
+        ax.set_ylim(80, 20000)
+
+    plt.tight_layout()
+    plt.savefig(f'./plots/characters_vs_inference_time_{model}_model.pdf', dpi=300, bbox_inches='tight')
     plt.show()
 
 
