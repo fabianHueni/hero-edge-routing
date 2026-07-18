@@ -59,62 +59,90 @@ def plot_characters_vs_inference_time(
     model: str
 ) -> None:
     """
-    Plots scatter plots of number of input characters vs inference time for multiple models and experiments.
-
-    Args:
-        experiment_data: A list of lists of DataFrames. Each sublist corresponds to a 
-                         model/device combination and contains DataFrames for different datasets.
-        labels: A list of lists of labels corresponding to each DataFrame in experiment_data.
-        subplot_names: A list of model names corresponding to each sublist in experiment_data.
-        model: The name of the model being evaluated.
+    Plots scatter plots of number of input characters vs inference time with shared axes.
     """
+    # Okabe-Ito Palette Colors
     COLOR_MAP = {
-        'spam': '#2ca02c',        # green
-        'ag-news': '#1f77b4',     # blue
-        'boolq': '#ff7f0e',       # orange
-        'lorem-ipsum': '#9467bd'  # purple
+        'spam': '#56B4E9',        # Sky Blue
+        'ag-news': '#009E73',     # Bluish Green
+        'boolq': '#D55E00',       # Vermillion
+        'lorem-ipsum': '#E69F00'  # Orange
     }
     DEFAULT_COLOR = 'black'
+    MARKER_MAP = {'spam': 'o', 'ag-news': '^', 'boolq': 's', 'lorem-ipsum': 'D'}
+    
+    # Custom size mapping to compensate for marker geometry and visual weight
+    SIZE_MAP = {'spam': 35, 'ag-news': 60, 'boolq': 30, 'lorem-ipsum': 25}
+    DEFAULT_SIZE = 20
 
     sns.set(style="whitegrid")
 
     rows = len(experiment_data) // 2 + len(experiment_data) % 2
-    fig, axes = plt.subplots(nrows=rows, ncols=2, figsize=(14, rows * 4))
+    
+    # Enable shared axes: share x across columns, share y across rows
+    fig, axes = plt.subplots(nrows=rows, ncols=2, figsize=(14, rows * 4.5), sharex='col', sharey='row')
     axes_flat = axes.flatten()
 
     # Loop through each model/device combination
-    for ax, model_experiments, model_labels, model_name in zip(axes_flat, experiment_data, labels, subplot_names):
+    for idx, (ax, model_experiments, model_labels, model_name) in enumerate(zip(axes_flat, experiment_data, labels, subplot_names)):
+        
+        # Determine subplot positioning in the grid
+        is_left_col = (idx % 2 == 0)
+        is_bottom_row = (idx >= (rows - 1) * 2)
 
+        # Sort model_experiments and model_labels so smaller datasets are plotted last (on top)
+        sorted_zip = sorted(zip(model_experiments, model_labels), key=lambda x: len(x[0]), reverse=True)
         # Loop through each DataFrame and plot
-        for df, label in zip(model_experiments, model_labels):
+        for df, label in sorted_zip:
             if 'number_of_characters' in df.columns and 'inference_time_ms' in df.columns:
-                # generate a size vector to set all sizes to 1 for better visibility
-                size = np.ones(len(df)) * 5
+                # Use the size mapping dictionary to determine marker-specific size
+                base_size = SIZE_MAP.get(label.lower(), DEFAULT_SIZE)
+                size = np.ones(len(df)) * base_size
                 color = COLOR_MAP.get(label.lower(), DEFAULT_COLOR)
                 ax.scatter(df['number_of_characters'], df['inference_time_ms'], 
-                           color=color, alpha=0.4, label=label, sizes=size)
+                           marker=MARKER_MAP.get(label.lower(), 'o'),
+                           color=color, alpha=0.6, label=label, s=size,
+                           edgecolors='white', linewidths=0.2)
 
-        ax.set_title(model_name, fontsize=12)
-        ax.set_xlabel('Input Characters', fontsize=12)
-        ax.set_ylabel('Inference Time (ms)', fontsize=12)
+        ax.set_title(model_name, fontsize=25)
+        
+        # Only add X label to the bottom row subplots
+        if is_bottom_row:
+            ax.set_xlabel('Input Characters', fontsize=22)
+        else:
+            ax.set_xlabel('')
 
+        # Only add Y label and keep ticks on the left column subplots
+        if is_left_col:
+            ax.set_ylabel('Inference Time (ms)', fontsize=22)
+        else:
+            ax.set_ylabel('')
+            # Explicitly turn off tick labels for the right column
+            ax.yaxis.set_tick_params(labelleft=False)
+
+        # Set scale types and tick sizes inside the loop
         ax.set_yscale('log')
         ax.set_xscale('log')
+        ax.tick_params(axis='both', which='major', labelsize=22)
+        ax.grid(True, which="both", ls="-", alpha=0.5)
 
-        ax.set_xlim(100, 15000)
-        ax.set_ylim(100, 15000)
+        if idx == 0:
+            leg = ax.legend(fontsize=22, loc='lower right')
+            for lh in leg.legend_handles: 
+                lh.set_alpha(1.0)
+                lh.set_sizes([150])
 
-        ax.grid()
-        ax.legend(title='Datasets', fontsize=11, loc='upper left')
-
-    fig.suptitle(f'Inference Time vs. Input Characters for {model}', fontsize=20)
-    plt.tight_layout()
-
+    # Remove last unused subplot if applicable BEFORE setting global limits
     if len(experiment_data) % 2 != 0:
-        # remove last unused subplot
         fig.delaxes(axes_flat[-1])
 
-    plt.savefig(f'./plots/characters_vs_inference_time_{model}_model.png', dpi=300)
+    # ---> CRITICAL FIX: Apply uniform limits globally to all remaining axes <---
+    for ax in fig.axes:
+        ax.set_xlim(300, 30000)
+        ax.set_ylim(80, 20000)
+
+    plt.tight_layout()
+    plt.savefig(f'./plots/characters_vs_inference_time_{model}_model.pdf', dpi=300, bbox_inches='tight')
     plt.show()
 
 
@@ -129,13 +157,14 @@ def plot_input_character_distribution(
         datasets: List of DataFrames, each containing a 'number_of_characters' column for a specific dataset.
         dataset_names: The name of the datasets corresponding to each DataFrame, used for labeling the plots.
     """
-    fig, axes = plt.subplots(1, 3, figsize=(11, 2.5), sharey=True)
+    import matplotlib.ticker as ticker
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5), sharey=True)
 
     COLOR_MAP = {
-        'Spam/Ham (1708.5±1498.6 characters)': '#2ca02c',  # green
-        'AG News (755.9±66.6 characters)': '#1f77b4',       # blue
-        'BoolQ (858.5±296.4 characters)': '#ff7f0e',        # orange
-        'lorem-ipsum': '#9467bd'                            # purple
+        'Spam/Ham': '#56B4E9',    # Sky Blue
+        'AG News': '#009E73',     # Bluish Green
+        'BoolQ': '#D55E00',       # Vermillion
+        'lorem-ipsum': '#E69F00'  # Orange
     }
 
     for i, (dataset, name) in enumerate(zip(datasets, dataset_names)):
@@ -145,17 +174,31 @@ def plot_input_character_distribution(
         sns.histplot(
             data=dataset.dropna(),
             color=color,
-            alpha=0.6,
+            alpha=0.9,
             kde=True,
             ax=ax
         )
 
-        ax.set_title(f"{name}")
-        ax.set_xlabel('Number of Characters')
-        ax.set_ylabel('Frequency')
-        ax.grid(axis='y', alpha=0.3)
+        ax.set_title(f"{name}", fontsize=25, pad=12)
+        ax.set_xlabel('Number of Characters', fontsize=22, labelpad=10)
+        
+        # Only put the Y label on the first column plot
+        if i == 0:
+            ax.set_ylabel('Frequency', fontsize=22)
+        else:
+            ax.set_ylabel('')
 
-    plt.tight_layout()
+        # Fix the cluttered x-ticks by forcing a maximum of 4 clean intervals
+        ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=4))
+        
+        ax.tick_params(axis='both', which='major', labelsize=20)
+        
+        # Enable clean horizontal grid lines; keep vertical lines soft
+        ax.grid(True, axis='y', ls='-', alpha=0.5)
+        ax.grid(False, axis='x')
+
+    # Add explicit horizontal padding between subplots to stop numbers from bumping into each other
+    plt.tight_layout(pad=2.0, w_pad=0.3)
     plt.savefig(f'./plots/characters_distribution_per_dataset.pdf', format='pdf', dpi=300)
     plt.show()
 
@@ -838,10 +881,12 @@ def plot_policy_comparison(
     detailed_results: List[Dict[str, Any]], 
     policies_to_test: List[str], 
     dataset_name: str = "unspecified",
-    add_errorbars: bool = False
+    add_errorbars: bool = False,
+    show_x_axis: bool = True
 ) -> None:
     """
     Plots the final line graph mapping mean response times against the arrival rate lambdas.
+    Updated for strict black-and-white print compliance and high contrast, with fixed color matching.
     """
     results_df = pd.DataFrame(detailed_results)
     results_df = results_df[results_df['Policy'].isin(policies_to_test)]
@@ -853,13 +898,38 @@ def plot_policy_comparison(
     sim_policies = standard_policies_df['Policy'].unique().tolist()
     experimental_policy_names = experimental_policies_df['Policy'].unique().tolist()
 
+    # Okabe-Ito high-contrast, colorblind-safe palette
+    okabe_ito = ['#E69F00', '#56B4E9', '#009E73', '#CC79A7', '#D55E00', '#0072B2', '#F0E442', '#000000']
+    
+    # Map each simulation policy to a specific color so we can reuse it for experimental points
+    sim_color_dict = dict(zip(sim_policies, okabe_ito[:len(sim_policies)]))
+
+    # Distinct markers for grayscale separation
+    marker_shapes = ['o', 's', '^', 'D', 'v', 'p', '*'][:len(sim_policies)]
+
     sns.set_theme(style="whitegrid")
     fig, ax = plt.subplots(figsize=(6, 4))
+
+    # 1. Add the clear, non-bolded title requested by the reviewer with exact casing
+    TITLE_MAP = {
+        'boolq': 'BoolQ',
+        'ag-news': 'AG News',
+        'spam/ham': 'Spam/Ham',
+    }
+    
+    if dataset_name != "unspecified":
+        clean_name = dataset_name.lower().strip()
+        # Look up exact casing, fallback to the generic .title() if not found
+        title_text = TITLE_MAP.get(clean_name, dataset_name.replace('_', ' ').title())
+    else:
+        title_text = "Dataset Performance"
+
+    ax.set_title(title_text, fontweight='normal', fontsize=15, pad=10)
 
     if not standard_policies_df.empty:
         sns.lineplot(
             data=standard_policies_df,
-            legend=None,
+            legend='full',
             x='Lambda',
             y='Total Latency (s)',
             hue='Policy',
@@ -867,45 +937,44 @@ def plot_policy_comparison(
             style='Policy',
             style_order=sim_policies,
             ax=ax,
-            palette='Set1',
-            marker='o',
-            markeredgecolor=None,
-            markersize=2,
-            linewidth=1,
+            palette=sim_color_dict,
+            markers=marker_shapes, # Forces distinct geometric shapes
+            dashes=True,           # Forces distinct line styles (solid, dashed, dotted)
+            markersize=6,          
+            linewidth=2.5,         
             errorbar='sd'
         )
         
-        # Manually add error bars using the pre-calculated std column
         if add_errorbars and 'Total Latency std (s)' in standard_policies_df.columns:
-            # Get the colors used by seaborn to match them
-            hue_order = [p for p in policies_to_test]
-            palette = sns.color_palette('viridis', n_colors=len(hue_order))
-            color_map = dict(zip(hue_order, palette))
-
-            for policy in hue_order:
-                if (policy=='HERO') & False:
+            for policy in sim_policies:
+                if (policy == 'HERO') & False:
                     policy_data = standard_policies_df[standard_policies_df['Policy'] == policy]
                     if not policy_data.empty:
                         ax.errorbar(
                             x=policy_data['Lambda'],
                             y=policy_data['Total Latency (s)'],
                             yerr=policy_data['Total Latency std (s)'],
-                            fmt='none', # Don't draw a marker here, lineplot already did
-                            color=color_map.get(policy),
+                            fmt='none', 
+                            color=sim_color_dict.get(policy),
                             capsize=5,
                             alpha=0.6
                         )
 
-    # 2. Plot all the EXPERIMENTAL data with distinct markers
+    # 2. Plot all the EXPERIMENTAL data mapped to their parent colors
     if not experimental_policies_df.empty:
-        # Use a different color palette for experimental data to make it stand out
-        base_palette = sns.color_palette("Set1", n_colors=5) # Generate at least 5 colors
-        # Select the 0th, 1st, and 4th colors from the base palette
-        exp_palette = [base_palette[0], base_palette[1], base_palette[4]]
-        
-        for i, policy_name in enumerate(experimental_policy_names):
+        for policy_name in experimental_policy_names:
             policy_data = experimental_policies_df[experimental_policies_df['Policy'] == policy_name]
             y_err_col = 'Total Latency std (s)' if 'Total Latency std (s)' in policy_data.columns else None
+            
+            # Extract the base policy name (e.g., "Always Device (Experiment)" -> "Always Device")
+            base_name = policy_name.replace(' (Experiment)', '').strip()
+            
+            # -> CRITICAL FIX: Robust substring match to find the parent color <-
+            matched_color = '#000000' # Default fallback
+            for sim_pol, color in sim_color_dict.items():
+                if base_name in sim_pol:
+                    matched_color = color
+                    break
             
             ax.errorbar(
                 x=policy_data['Lambda'],
@@ -913,23 +982,35 @@ def plot_policy_comparison(
                 yerr=policy_data[y_err_col].values if y_err_col else None,
                 label=policy_name,
                 fmt='X',           
-                color=exp_palette[i],
-                markersize=6,
-                markeredgecolor='black',
-                capsize=3,
-                elinewidth=0.5,
+                color=matched_color,
+                markersize=8,               
+                markeredgecolor='black',    
+                markeredgewidth=0.5,
+                capsize=4,
+                elinewidth=1.5,
                 zorder=10          
             )
 
-    ax.set_ylabel('Mean Response Time (s)')
-    ax.set_xlabel('Arrival Rate λ (req/s)')
-    ax.set_ylim(0, 3.5)
+    ax.set_ylabel('Mean Response Time (s)', fontsize=15)
+    ax.set_xlabel('Arrival Rate λ (req/s)', fontsize=15)
+    ax.set_ylim(0, 2.5)
     ax.set_xlim(0, 16)
+    ax.tick_params(axis='both', which='major', labelsize=14)
 
-    ax.grid(axis='y', linestyle='--', alpha=0.6)
-    ax.grid(axis='x', linestyle='--', alpha=0.6)
+    ax.grid(axis='y', linestyle='-', alpha=0.5)
+    ax.grid(axis='x', linestyle='-', alpha=0.5)
+
+    if show_x_axis:
+        ax.set_xlabel('Arrival Rate λ (req/s)', fontsize=15)
+    else:
+        ax.set_xlabel('')
+        ax.tick_params(axis='x', which='both', labelbottom=False)  # Hides the numbers
     
-    handles, labels = ax.get_legend_handles_labels()
+    # Force Matplotlib to generate the legend based on the plot content
+    temp_leg = ax.legend()
+    handles = temp_leg.legend_handles
+    labels = [text.get_text() for text in temp_leg.get_texts()]
+    temp_leg.remove()
 
     plt.tight_layout() 
     
@@ -937,34 +1018,77 @@ def plot_policy_comparison(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     safe_ds = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in str(dataset_name)).strip().replace(' ', '_')
-    timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
-    filename = out_dir / f'policy_performance_{safe_ds}_{timestamp}.pdf'
-
+    filename = out_dir / f'policy_comparison_{safe_ds}.pdf'
     plt.savefig(filename, format='pdf', dpi=300)
     print(f"Saved plot: {filename}")
 
-    plot_legend_only(handles, labels, out_dir, safe_ds, timestamp)
+    plot_legend_only(handles, labels, out_dir)
     plt.show()
 
 
 def plot_legend_only(
     handles: List[Any], 
     labels: List[str], 
-    out_dir: Path, 
-    safe_ds: str, 
-    timestamp: str
+    out_dir: Path
 ) -> None:
     """
     Creates and saves a plot containing only the legend.
     """
-    fig_legend = plt.figure(figsize=(6, 4)) 
+    import matplotlib.lines as mlines
+
+    fig_legend = plt.figure(figsize=(8, 4)) 
     
-    fig_legend.legend(handles, labels, loc='center', frameon=False, title=r"Policy", title_fontproperties={'weight':'bold'})
+    # Manually rebuild the handles for the experimental data to guarantee the 'X' marker shows
+    fixed_handles = []
+    for h, label in zip(handles, labels):
+        if "(Experiment)" in label:
+            # extract the color from the original handle container
+            if hasattr(h, 'lines'):  # It's an ErrorbarContainer
+                color = h.lines[0].get_color()
+            elif hasattr(h, 'get_color'):  # It's a standard Line2D
+                color = h.get_color()
+            else:
+                color = 'black' # Fallback
+                
+            # Build a custom proxy handle with the 'X' marker, matching the exact styling
+            proxy = mlines.Line2D(
+                [], [], 
+                color=color, 
+                marker='X', 
+                markersize=8, 
+                markeredgecolor='black', 
+                markeredgewidth=0.5, 
+                linestyle='None' # Removes the trailing line, leaving just the marker
+            )
+            fixed_handles.append(proxy)
+        else:
+            fixed_handles.append(h)
+
+    legend = fig_legend.legend(
+        fixed_handles, 
+        labels, 
+        loc='center', 
+        frameon=False, 
+        title=r"Applied Policy", 
+        title_fontproperties={'size': 14},
+        ncol=1,            
+        fontsize=12
+    )
+    plt.tight_layout()
+    
     plt.axis('off')
 
-    legend_filename = out_dir / f'legend_{safe_ds}_{timestamp}.pdf'
-    fig_legend.savefig(legend_filename, format='pdf', dpi=300, bbox_inches='tight')
-    print(f"Saved legend-only plot: {legend_filename}")
+    legend_filename = out_dir / f'policy_comparison_legend.pdf'
+    
+    fig_legend.savefig(
+        legend_filename, 
+        format='pdf', 
+        dpi=300, 
+        bbox_inches='tight',
+        pad_inches=0.0, 
+        bbox_extra_artists=(legend,)
+    )
+    print(f"Saved complete legend-only plot: {legend_filename}")
 
     plt.show()
     plt.close(fig_legend)
@@ -975,7 +1099,8 @@ def load_and_plot_policy_results(
     augment_with_jseq: bool = False, 
     augment_with_baseline: bool = False, 
     dataset_name_for_exp: Optional[str] = None, 
-    dataset_name_title: str = "unspecified"
+    dataset_name_title: str = "unspecified",
+    show_x_axis: bool = True
 ) -> None:
     """
     Loads policy simulation results from a CSV, optionally augments them with
@@ -1154,7 +1279,7 @@ def load_and_plot_policy_results(
     
     try:
         print("\nAttempting to plot results...")
-        plot_policy_comparison(detailed_results, policies_to_test, dataset_name_title)
+        plot_policy_comparison(detailed_results, policies_to_test, dataset_name_title, show_x_axis=show_x_axis)
         print("Plot generated successfully.")
     except Exception as e:
         print(f"[ERROR]: An unexpected error occurred during plotting: {e}")
@@ -1167,7 +1292,7 @@ def run_multi_run_analysis(
     show_evolution: bool = True
 ) -> None:
     """
-    Analyzes and plots total error deviations across multple experiment runs.
+    Analyzes and plots total error deviations across multiple experiment runs.
     """
     if not file_list:
         print("Error: The file list is empty.")
@@ -1221,36 +1346,45 @@ def run_multi_run_analysis(
         plt.show()
 
     if show_evolution:
-        plt.figure(figsize=(8, 3.8))
+        plt.figure(figsize=(8.5, 4.2))
         
-        plt.plot(agg_df['dataset_item_id'], agg_df['abs_total_err_mean'], color='darkslategray', lw=1, label='Mean Inference + Queueing Time Prediction Error')
-        plt.fill_between(
-            agg_df['dataset_item_id'],
-            agg_df['abs_total_err_mean'] - agg_df['abs_total_err_std'],
-            agg_df['abs_total_err_mean'] + agg_df['abs_total_err_std'],
-            color='darkslategray', alpha=0.05, label='Std. Dev. Inference + Queueing Time Prediction Error'
+        # Colors selected directly from Okabe-Ito guidelines
+        color_total = '#009E73'  # Bluish Green
+        color_inf = '#D55E00'    # Vermillion
+        
+        # 1. Plot Mean Total Error (Solid Line Layout with cleaned labels)
+        plt.plot(
+            agg_df['dataset_item_id'], agg_df['abs_total_err_mean'], 
+            color=color_total, linestyle='-', lw=1.5, 
+            label='Mean Total Error (Inference + Queueing)'
         )
         
-        plt.plot(agg_df['dataset_item_id'], agg_df['abs_inf_err_mean'], color='darkviolet', lw=1, label='Mean Inference Time Prediction Error')
-        plt.fill_between(
-            agg_df['dataset_item_id'],
-            agg_df['abs_inf_err_mean'] - agg_df['abs_inf_err_std'],
-            agg_df['abs_inf_err_mean'] + agg_df['abs_inf_err_std'],
-            color='darkviolet', alpha=0.05, label='Std. Dev. Inference Time Prediction Error'
+        # 2. Plot Mean Inference Error (Dashed Line for clear B&W contrast)
+        plt.plot(
+            agg_df['dataset_item_id'], agg_df['abs_inf_err_mean'], 
+            color=color_inf, linestyle='--', lw=1.5, 
+            label='Mean Inference Error'
         )
         
+        # Sizing and framing layout optimization
         plt.yscale('log') 
-        plt.xlabel('Dataset Item ID')
-        plt.ylabel('Absolute Error (ms) [Log Scale]')
-        plt.legend()
+        plt.xlabel('Dataset Item ID', fontsize=14, labelpad=8)
+        plt.ylabel('Absolute Error (ms) [Log Scale]', fontsize=14, labelpad=8)
+        plt.tick_params(axis='both', which='major', labelsize=12)
+        
+        # Soft baseline grid integration
+        plt.grid(True, which="major", axis="both", ls="-", alpha=0.4)
+        plt.grid(False, which="minor", axis="y") 
+        
+        # Clean, compact legend
+        plt.legend(fontsize=12, loc='upper right', frameon=True, framealpha=0.9)
         
         out_dir = Path('./plots')
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
-        filename = out_dir / f'time_prediction_error_{timestamp}.pdf'
+        filename = out_dir / f'time_prediction_error.pdf'
 
-        plt.savefig(filename, format='pdf', dpi=300)
+        plt.savefig(filename, format='pdf', dpi=300, bbox_inches='tight')
         print(f"Saved plot: {filename}")
 
         plt.show()
