@@ -157,13 +157,14 @@ def plot_input_character_distribution(
         datasets: List of DataFrames, each containing a 'number_of_characters' column for a specific dataset.
         dataset_names: The name of the datasets corresponding to each DataFrame, used for labeling the plots.
     """
-    fig, axes = plt.subplots(1, 3, figsize=(11, 2.5), sharey=True)
+    import matplotlib.ticker as ticker
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5), sharey=True)
 
     COLOR_MAP = {
-        'Spam/Ham (1708.5±1498.6 characters)': '#2ca02c',  # green
-        'AG News (755.9±66.6 characters)': '#1f77b4',       # blue
-        'BoolQ (858.5±296.4 characters)': '#ff7f0e',        # orange
-        'lorem-ipsum': '#9467bd'                            # purple
+        'Spam/Ham': '#56B4E9',    # Sky Blue
+        'AG News': '#009E73',     # Bluish Green
+        'BoolQ': '#D55E00',       # Vermillion
+        'lorem-ipsum': '#E69F00'  # Orange
     }
 
     for i, (dataset, name) in enumerate(zip(datasets, dataset_names)):
@@ -173,17 +174,31 @@ def plot_input_character_distribution(
         sns.histplot(
             data=dataset.dropna(),
             color=color,
-            alpha=0.6,
+            alpha=0.9,
             kde=True,
             ax=ax
         )
 
-        ax.set_title(f"{name}")
-        ax.set_xlabel('Number of Characters')
-        ax.set_ylabel('Frequency')
-        ax.grid(axis='y', alpha=0.3)
+        ax.set_title(f"{name}", fontsize=25, pad=12)
+        ax.set_xlabel('Number of Characters', fontsize=22, labelpad=10)
+        
+        # Only put the Y label on the first column plot
+        if i == 0:
+            ax.set_ylabel('Frequency', fontsize=22)
+        else:
+            ax.set_ylabel('')
 
-    plt.tight_layout()
+        # Fix the cluttered x-ticks by forcing a maximum of 4 clean intervals
+        ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=4))
+        
+        ax.tick_params(axis='both', which='major', labelsize=20)
+        
+        # Enable clean horizontal grid lines; keep vertical lines soft
+        ax.grid(True, axis='y', ls='-', alpha=0.5)
+        ax.grid(False, axis='x')
+
+    # Add explicit horizontal padding between subplots to stop numbers from bumping into each other
+    plt.tight_layout(pad=2.0, w_pad=0.3)
     plt.savefig(f'./plots/characters_distribution_per_dataset.pdf', format='pdf', dpi=300)
     plt.show()
 
