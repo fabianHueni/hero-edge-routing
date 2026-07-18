@@ -13,3 +13,4 @@ jobs:
           github_repo_id: ${{ github.repository }}
           huggingface_repo_id: fhueni/HERO
           hf_token: ${{ secrets.HF_TOKEN }}
+          space_sdk: static
