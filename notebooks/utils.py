@@ -881,10 +881,12 @@ def plot_policy_comparison(
     detailed_results: List[Dict[str, Any]], 
     policies_to_test: List[str], 
     dataset_name: str = "unspecified",
-    add_errorbars: bool = False
+    add_errorbars: bool = False,
+    show_x_axis: bool = True
 ) -> None:
     """
     Plots the final line graph mapping mean response times against the arrival rate lambdas.
+    Updated for strict black-and-white print compliance and high contrast, with fixed color matching.
     """
     results_df = pd.DataFrame(detailed_results)
     results_df = results_df[results_df['Policy'].isin(policies_to_test)]
@@ -896,13 +898,38 @@ def plot_policy_comparison(
     sim_policies = standard_policies_df['Policy'].unique().tolist()
     experimental_policy_names = experimental_policies_df['Policy'].unique().tolist()
 
+    # Okabe-Ito high-contrast, colorblind-safe palette
+    okabe_ito = ['#E69F00', '#56B4E9', '#009E73', '#CC79A7', '#D55E00', '#0072B2', '#F0E442', '#000000']
+    
+    # Map each simulation policy to a specific color so we can reuse it for experimental points
+    sim_color_dict = dict(zip(sim_policies, okabe_ito[:len(sim_policies)]))
+
+    # Distinct markers for grayscale separation
+    marker_shapes = ['o', 's', '^', 'D', 'v', 'p', '*'][:len(sim_policies)]
+
     sns.set_theme(style="whitegrid")
     fig, ax = plt.subplots(figsize=(6, 4))
+
+    # 1. Add the clear, non-bolded title requested by the reviewer with exact casing
+    TITLE_MAP = {
+        'boolq': 'BoolQ',
+        'ag-news': 'AG News',
+        'spam/ham': 'Spam/Ham',
+    }
+    
+    if dataset_name != "unspecified":
+        clean_name = dataset_name.lower().strip()
+        # Look up exact casing, fallback to the generic .title() if not found
+        title_text = TITLE_MAP.get(clean_name, dataset_name.replace('_', ' ').title())
+    else:
+        title_text = "Dataset Performance"
+
+    ax.set_title(title_text, fontweight='normal', fontsize=15, pad=10)
 
     if not standard_policies_df.empty:
         sns.lineplot(
             data=standard_policies_df,
-            legend=None,
+            legend='full',
             x='Lambda',
             y='Total Latency (s)',
             hue='Policy',
@@ -910,45 +937,44 @@ def plot_policy_comparison(
             style='Policy',
             style_order=sim_policies,
             ax=ax,
-            palette='Set1',
-            marker='o',
-            markeredgecolor=None,
-            markersize=2,
-            linewidth=1,
+            palette=sim_color_dict,
+            markers=marker_shapes, # Forces distinct geometric shapes
+            dashes=True,           # Forces distinct line styles (solid, dashed, dotted)
+            markersize=6,          
+            linewidth=2.5,         
             errorbar='sd'
         )
         
-        # Manually add error bars using the pre-calculated std column
         if add_errorbars and 'Total Latency std (s)' in standard_policies_df.columns:
-            # Get the colors used by seaborn to match them
-            hue_order = [p for p in policies_to_test]
-            palette = sns.color_palette('viridis', n_colors=len(hue_order))
-            color_map = dict(zip(hue_order, palette))
-
-            for policy in hue_order:
-                if (policy=='HERO') & False:
+            for policy in sim_policies:
+                if (policy == 'HERO') & False:
                     policy_data = standard_policies_df[standard_policies_df['Policy'] == policy]
                     if not policy_data.empty:
                         ax.errorbar(
                             x=policy_data['Lambda'],
                             y=policy_data['Total Latency (s)'],
                             yerr=policy_data['Total Latency std (s)'],
-                            fmt='none', # Don't draw a marker here, lineplot already did
-                            color=color_map.get(policy),
+                            fmt='none', 
+                            color=sim_color_dict.get(policy),
                             capsize=5,
                             alpha=0.6
                         )
 
-    # 2. Plot all the EXPERIMENTAL data with distinct markers
+    # 2. Plot all the EXPERIMENTAL data mapped to their parent colors
     if not experimental_policies_df.empty:
-        # Use a different color palette for experimental data to make it stand out
-        base_palette = sns.color_palette("Set1", n_colors=5) # Generate at least 5 colors
-        # Select the 0th, 1st, and 4th colors from the base palette
-        exp_palette = [base_palette[0], base_palette[1], base_palette[4]]
-        
-        for i, policy_name in enumerate(experimental_policy_names):
+        for policy_name in experimental_policy_names:
             policy_data = experimental_policies_df[experimental_policies_df['Policy'] == policy_name]
             y_err_col = 'Total Latency std (s)' if 'Total Latency std (s)' in policy_data.columns else None
+            
+            # Extract the base policy name (e.g., "Always Device (Experiment)" -> "Always Device")
+            base_name = policy_name.replace(' (Experiment)', '').strip()
+            
+            # -> CRITICAL FIX: Robust substring match to find the parent color <-
+            matched_color = '#000000' # Default fallback
+            for sim_pol, color in sim_color_dict.items():
+                if base_name in sim_pol:
+                    matched_color = color
+                    break
             
             ax.errorbar(
                 x=policy_data['Lambda'],
@@ -956,23 +982,35 @@ def plot_policy_comparison(
                 yerr=policy_data[y_err_col].values if y_err_col else None,
                 label=policy_name,
                 fmt='X',           
-                color=exp_palette[i],
-                markersize=6,
-                markeredgecolor='black',
-                capsize=3,
-                elinewidth=0.5,
+                color=matched_color,
+                markersize=8,               
+                markeredgecolor='black',    
+                markeredgewidth=0.5,
+                capsize=4,
+                elinewidth=1.5,
                 zorder=10          
             )
 
-    ax.set_ylabel('Mean Response Time (s)')
-    ax.set_xlabel('Arrival Rate λ (req/s)')
-    ax.set_ylim(0, 3.5)
+    ax.set_ylabel('Mean Response Time (s)', fontsize=15)
+    ax.set_xlabel('Arrival Rate λ (req/s)', fontsize=15)
+    ax.set_ylim(0, 2.5)
     ax.set_xlim(0, 16)
+    ax.tick_params(axis='both', which='major', labelsize=14)
 
-    ax.grid(axis='y', linestyle='--', alpha=0.6)
-    ax.grid(axis='x', linestyle='--', alpha=0.6)
+    ax.grid(axis='y', linestyle='-', alpha=0.5)
+    ax.grid(axis='x', linestyle='-', alpha=0.5)
+
+    if show_x_axis:
+        ax.set_xlabel('Arrival Rate λ (req/s)', fontsize=15)
+    else:
+        ax.set_xlabel('')
+        ax.tick_params(axis='x', which='both', labelbottom=False)  # Hides the numbers
     
-    handles, labels = ax.get_legend_handles_labels()
+    # Force Matplotlib to generate the legend based on the plot content
+    temp_leg = ax.legend()
+    handles = temp_leg.legend_handles
+    labels = [text.get_text() for text in temp_leg.get_texts()]
+    temp_leg.remove()
 
     plt.tight_layout() 
     
@@ -980,34 +1018,77 @@ def plot_policy_comparison(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     safe_ds = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in str(dataset_name)).strip().replace(' ', '_')
-    timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
-    filename = out_dir / f'policy_performance_{safe_ds}_{timestamp}.pdf'
-
+    filename = out_dir / f'policy_comparison_{safe_ds}.pdf'
     plt.savefig(filename, format='pdf', dpi=300)
     print(f"Saved plot: {filename}")
 
-    plot_legend_only(handles, labels, out_dir, safe_ds, timestamp)
+    plot_legend_only(handles, labels, out_dir)
     plt.show()
 
 
 def plot_legend_only(
     handles: List[Any], 
     labels: List[str], 
-    out_dir: Path, 
-    safe_ds: str, 
-    timestamp: str
+    out_dir: Path
 ) -> None:
     """
     Creates and saves a plot containing only the legend.
     """
-    fig_legend = plt.figure(figsize=(6, 4)) 
+    import matplotlib.lines as mlines
+
+    fig_legend = plt.figure(figsize=(8, 4)) 
     
-    fig_legend.legend(handles, labels, loc='center', frameon=False, title=r"Policy", title_fontproperties={'weight':'bold'})
+    # Manually rebuild the handles for the experimental data to guarantee the 'X' marker shows
+    fixed_handles = []
+    for h, label in zip(handles, labels):
+        if "(Experiment)" in label:
+            # extract the color from the original handle container
+            if hasattr(h, 'lines'):  # It's an ErrorbarContainer
+                color = h.lines[0].get_color()
+            elif hasattr(h, 'get_color'):  # It's a standard Line2D
+                color = h.get_color()
+            else:
+                color = 'black' # Fallback
+                
+            # Build a custom proxy handle with the 'X' marker, matching the exact styling
+            proxy = mlines.Line2D(
+                [], [], 
+                color=color, 
+                marker='X', 
+                markersize=8, 
+                markeredgecolor='black', 
+                markeredgewidth=0.5, 
+                linestyle='None' # Removes the trailing line, leaving just the marker
+            )
+            fixed_handles.append(proxy)
+        else:
+            fixed_handles.append(h)
+
+    legend = fig_legend.legend(
+        fixed_handles, 
+        labels, 
+        loc='center', 
+        frameon=False, 
+        title=r"Applied Policy", 
+        title_fontproperties={'size': 14},
+        ncol=1,            
+        fontsize=12
+    )
+    plt.tight_layout()
+    
     plt.axis('off')
 
-    legend_filename = out_dir / f'legend_{safe_ds}_{timestamp}.pdf'
-    fig_legend.savefig(legend_filename, format='pdf', dpi=300, bbox_inches='tight')
-    print(f"Saved legend-only plot: {legend_filename}")
+    legend_filename = out_dir / f'policy_comparison_legend.pdf'
+    
+    fig_legend.savefig(
+        legend_filename, 
+        format='pdf', 
+        dpi=300, 
+        bbox_inches='tight',
+        pad_inches=0.0, 
+        bbox_extra_artists=(legend,)
+    )
+    print(f"Saved complete legend-only plot: {legend_filename}")
 
     plt.show()
     plt.close(fig_legend)
@@ -1018,7 +1099,8 @@ def load_and_plot_policy_results(
     augment_with_jseq: bool = False, 
     augment_with_baseline: bool = False, 
     dataset_name_for_exp: Optional[str] = None, 
-    dataset_name_title: str = "unspecified"
+    dataset_name_title: str = "unspecified",
+    show_x_axis: bool = True
 ) -> None:
     """
     Loads policy simulation results from a CSV, optionally augments them with
@@ -1197,7 +1279,7 @@ def load_and_plot_policy_results(
     
     try:
         print("\nAttempting to plot results...")
-        plot_policy_comparison(detailed_results, policies_to_test, dataset_name_title)
+        plot_policy_comparison(detailed_results, policies_to_test, dataset_name_title, show_x_axis=show_x_axis)
         print("Plot generated successfully.")
     except Exception as e:
         print(f"[ERROR]: An unexpected error occurred during plotting: {e}")
