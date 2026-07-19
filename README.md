@@ -98,7 +98,7 @@ The experiment runner is a static web application. No build step is required. A 
 
 - A modern browser with **WebGPU** support (we recommend brave or chrome, which were used for our experiments).
 - An [OpenRouter](https://openrouter.ai/) API key for cloud inference.
-- Git, Python, UV and Git Large File Storage (Git LFS: `git lfs install`) installed
+- Git, Python, UV and [Git Large File Storage](https://git-lfs.com/) installed
 
 **Steps**
 
