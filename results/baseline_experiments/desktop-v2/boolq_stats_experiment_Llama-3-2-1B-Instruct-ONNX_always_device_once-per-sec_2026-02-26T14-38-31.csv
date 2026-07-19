@@ -1,0 +1,4 @@
+route, total_requests, accuracy_percent, avg_latency_ms, avg_total_latency_ms, avg_queueing_time_ms, avg_inference_time_ms
+overall, 500, 51.60, 199.02, 208.97, 9.90, 199.07
+device, 500, 51.60, 199.02, 208.97, 9.90, 199.07
+cloud, 0, 0.00, 0.00, 0.00, 0.00, 0.00

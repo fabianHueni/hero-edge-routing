@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this framework or results, please cite the associated paper as below."
+authors:
+  - family-names: "Kehl"
+    given-names: "Philip"
+  - family-names: "Hüni"
+    given-names: "Fabian"
+  - family-names: "Lewandowski"
+    given-names: "Basile"
+  - family-names: "Chen"
+    given-names: "Lydia Y."
+title: "Hero: Hybrid Edge Routing for In-Browser Small Language Models"
+type: conference-paper
+collection-title: "Proceedings of the 2026 IEEE International Conference on Autonomic Computing and Self-Organizing Systems Companion (ACSOS-C)"
+year: 2026
+notes: "To appear"
