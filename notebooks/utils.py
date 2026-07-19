@@ -124,7 +124,7 @@ def plot_characters_vs_inference_time(
         ax.set_yscale('log')
         ax.set_xscale('log')
         ax.tick_params(axis='both', which='major', labelsize=22)
-        ax.grid(True, which="both", ls="-", alpha=0.5)
+        ax.grid(True, which="both", ls="-", alpha=0.0)
 
         if idx == 0:
             leg = ax.legend(fontsize=22, loc='lower right')
@@ -158,7 +158,7 @@ def plot_input_character_distribution(
         dataset_names: The name of the datasets corresponding to each DataFrame, used for labeling the plots.
     """
     import matplotlib.ticker as ticker
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(12, 3.5), sharey=True)
 
     COLOR_MAP = {
         'Spam/Ham': '#56B4E9',    # Sky Blue
@@ -194,7 +194,7 @@ def plot_input_character_distribution(
         ax.tick_params(axis='both', which='major', labelsize=20)
         
         # Enable clean horizontal grid lines; keep vertical lines soft
-        ax.grid(True, axis='y', ls='-', alpha=0.5)
+        ax.grid(True, axis='y', ls='-', alpha=0.0)
         ax.grid(False, axis='x')
 
     # Add explicit horizontal padding between subplots to stop numbers from bumping into each other
@@ -438,30 +438,30 @@ def simulate_routing_synthetic(
     return pd.DataFrame(results)
 
 
-def plot_threshold_comparisons(
+
+def run_threshold_simulations(
     test_lambdas: List[float], 
     thresholds: Union[List[int], range], 
     char_params: Tuple[float, float], 
     dev_model: Tuple[float, float, float], 
     cloud_model: Tuple[float, float, float]
-) -> None:
+) -> Dict[str, Dict[float, pd.DataFrame]]:
     """
-    Plots the impact of the threshold choice across different lambdas and arrival patterns.
+    Runs simulations for the threshold choice across different lambdas and arrival patterns.
+    Returns a nested dictionary mapping Scenario Title -> Lambda -> DataFrame.
     """
     scenarios = {
         r"Deterministic Arrivals ($c_{a}=0.0$)": 0.0,
         r"Poisson Arrivals ($c_{a}=1.0$)": 1.0
     }
 
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
-    colors = plt.cm.viridis(np.linspace(0, 1, len(test_lambdas)))
-    all_finite_latencies = []
+    results = {}
 
-    for i, (title, ca_val) in enumerate(scenarios.items()):
-        ax = axes[i]
+    for title, ca_val in scenarios.items():
         print(f"--- Running simulations for {title} ---")
-
-        for j, lam in enumerate(test_lambdas):
+        results[title] = {}
+        
+        for lam in test_lambdas:
             print(f"  -> Simulating λ = {lam:.1f} req/s")
             
             sim_res = simulate_routing_synthetic(
@@ -473,6 +473,32 @@ def plot_threshold_comparisons(
                 dev_model=dev_model, 
                 cloud_model=cloud_model
             )
+            results[title][lam] = sim_res
+
+    return results
+
+
+def plot_threshold_results(simulation_data: Dict[str, Dict[float, pd.DataFrame]]) -> None:
+    """
+    Plots the impact of the threshold choice using pre-computed simulation data.
+    """
+    scenarios = list(simulation_data.keys())
+    if not scenarios:
+        print("Error: No data provided to plot.")
+        return
+
+    # Extract the test lambdas from the first scenario to setup colors
+    test_lambdas = list(simulation_data[scenarios[0]].keys())
+    
+    fig, axes = plt.subplots(1, 2, figsize=(11, 3.5), sharey=True)
+    colors = plt.cm.viridis(np.linspace(0, 1, len(test_lambdas)))
+    all_finite_latencies = []
+
+    for i, title in enumerate(scenarios):
+        ax = axes[i]
+        
+        for j, lam in enumerate(test_lambdas):
+            sim_res = simulation_data[title][lam]
             
             ax.plot(sim_res['threshold'], sim_res['sim_latency'], 
                     label=f'λ = {lam:.1f}', color=colors[j], linewidth=2)
@@ -482,16 +508,17 @@ def plot_threshold_comparisons(
 
         ax.set_xlabel('Threshold (Characters)')
         ax.set_title(title)
-        ax.grid(True, which="both", linestyle='--', linewidth=0.5) 
+        ax.grid(True, which="both", linestyle='--', linewidth=0.5, alpha=0.0) 
         ax.set_yscale('log') 
 
-    axes[0].set_ylabel('Mean Response Time (s) [Log Scale]')
+    axes[0].set_ylabel('Mean Response Time (s)')
     axes[0].legend(title="Arrival Rate (req/s)")
 
     if all_finite_latencies:
         positive_latencies = [l for l in all_finite_latencies if l > 0]
         if positive_latencies:
-            upper_lim = np.percentile(positive_latencies, 99) * 1.5 
+            upper_lim = np.percentile(positive_latencies, 99) * 1.5
+            upper_lim = 100
             lower_lim = min(positive_latencies) * 0.9
             plt.ylim(lower_lim, upper_lim)
 
@@ -499,9 +526,8 @@ def plot_threshold_comparisons(
 
     out_dir = Path('./plots')
     out_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
-    filename = out_dir / f'threshold_comparison_{timestamp}.pdf'
-    plt.savefig(filename, format='pdf', dpi=300)
+    filename = out_dir / f'threshold_comparison.pdf'
+    plt.savefig(filename, format='pdf', dpi=300, bbox_inches='tight')
     print(f"Saved plot: {filename}")
 
     plt.show()
