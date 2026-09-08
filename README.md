@@ -190,12 +190,13 @@ subdirectories: `cloud`, `desktop`, `m2air`, `m4pro`, `zenbook`, etc.).
 | Package management  | [uv](https://github.com/astral-sh/uv)                                 |
 
 ---
+
 ## Note
 
-Please note that during development the HERP policy was preliminary called jseq. This is why in some files (csv and notebooks) 
+Please note that during development the HERO policy was preliminary called jseq. This is why in some files (csv and notebooks) 
 variables and columns can still be called jseq. We keep this to not break the analysis of existing results.
----
 
+---
 
 ## Citation
 

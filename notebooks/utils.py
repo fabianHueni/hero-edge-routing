@@ -904,11 +904,14 @@ def run_detailed_policy_simulation(
 
 
 def plot_policy_comparison(
-    detailed_results: List[Dict[str, Any]], 
-    policies_to_test: List[str], 
+    detailed_results: List[Dict[str, Any]],
+    policies_to_test: List[str],
     dataset_name: str = "unspecified",
     add_errorbars: bool = False,
-    show_x_axis: bool = True
+    show_x_axis: bool = True,
+    show_experimental_errorbars: bool = True,
+    output_suffix: str = "",
+    fade_simulations: bool = False
 ) -> None:
     """
     Plots the final line graph mapping mean response times against the arrival rate lambdas.
@@ -966,9 +969,10 @@ def plot_policy_comparison(
             palette=sim_color_dict,
             markers=marker_shapes, # Forces distinct geometric shapes
             dashes=True,           # Forces distinct line styles (solid, dashed, dotted)
-            markersize=6,          
-            linewidth=2.5,         
-            errorbar='sd'
+            markersize=6,
+            linewidth=2.5,
+            errorbar='sd',
+            alpha=0.3 if fade_simulations else 1.0
         )
         
         if add_errorbars and 'Total Latency std (s)' in standard_policies_df.columns:
@@ -1005,7 +1009,7 @@ def plot_policy_comparison(
             ax.errorbar(
                 x=policy_data['Lambda'],
                 y=policy_data['Total Latency (s)'],
-                yerr=policy_data[y_err_col].values if y_err_col else None,
+                yerr=policy_data[y_err_col].values if (y_err_col and show_experimental_errorbars) else None,
                 label=policy_name,
                 fmt='X',           
                 color=matched_color,
@@ -1044,18 +1048,19 @@ def plot_policy_comparison(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     safe_ds = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in str(dataset_name)).strip().replace(' ', '_')
-    filename = out_dir / f'policy_comparison_{safe_ds}.pdf'
+    filename = out_dir / f'policy_comparison_{safe_ds}{output_suffix}.pdf'
     plt.savefig(filename, format='pdf', dpi=300)
     print(f"Saved plot: {filename}")
 
-    plot_legend_only(handles, labels, out_dir)
+    plot_legend_only(handles, labels, out_dir, output_suffix=output_suffix)
     plt.show()
 
 
 def plot_legend_only(
-    handles: List[Any], 
-    labels: List[str], 
-    out_dir: Path
+    handles: List[Any],
+    labels: List[str],
+    out_dir: Path,
+    output_suffix: str = ""
 ) -> None:
     """
     Creates and saves a plot containing only the legend.
@@ -1104,7 +1109,7 @@ def plot_legend_only(
     
     plt.axis('off')
 
-    legend_filename = out_dir / f'policy_comparison_legend.pdf'
+    legend_filename = out_dir / f'policy_comparison_legend{output_suffix}.pdf'
     
     fig_legend.savefig(
         legend_filename, 
@@ -1121,12 +1126,16 @@ def plot_legend_only(
 
 
 def load_and_plot_policy_results(
-    file_path_str: Union[str, Path], 
-    augment_with_jseq: bool = False, 
-    augment_with_baseline: bool = False, 
-    dataset_name_for_exp: Optional[str] = None, 
+    file_path_str: Union[str, Path],
+    augment_with_jseq: bool = False,
+    augment_with_baseline: bool = False,
+    dataset_name_for_exp: Optional[str] = None,
     dataset_name_title: str = "unspecified",
-    show_x_axis: bool = True
+    show_x_axis: bool = True,
+    policies_subset: Optional[List[str]] = None,
+    show_experimental_errorbars: bool = True,
+    output_suffix: str = "",
+    fade_simulations: bool = False
 ) -> None:
     """
     Loads policy simulation results from a CSV, optionally augments them with
@@ -1144,9 +1153,18 @@ def load_and_plot_policy_results(
         policies_to_test = results_df['Policy'].unique().tolist()
 
         policies_to_test = [
-            p for p in policies_to_test 
+            p for p in policies_to_test
             if not p.startswith('Round Robin 2x Device') and not p.startswith('Round Robin 2x Cloud')
         ]
+
+        if policies_subset is not None:
+            policies_to_test = [
+                p for p in policies_to_test
+                if any(sub in p for sub in policies_subset)
+            ]
+            detailed_results = [
+                r for r in detailed_results if r['Policy'] in policies_to_test
+            ]
 
         print(f"[SUCCESS]: Loaded data from {file_path}")
         print(f"           Found {len(detailed_results)} records and {len(policies_to_test)} policies to plot.")
@@ -1305,7 +1323,15 @@ def load_and_plot_policy_results(
     
     try:
         print("\nAttempting to plot results...")
-        plot_policy_comparison(detailed_results, policies_to_test, dataset_name_title, show_x_axis=show_x_axis)
+        plot_policy_comparison(
+            detailed_results,
+            policies_to_test,
+            dataset_name_title,
+            show_x_axis=show_x_axis,
+            show_experimental_errorbars=show_experimental_errorbars,
+            output_suffix=output_suffix,
+            fade_simulations=fade_simulations
+        )
         print("Plot generated successfully.")
     except Exception as e:
         print(f"[ERROR]: An unexpected error occurred during plotting: {e}")
